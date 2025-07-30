@@ -1,5 +1,12 @@
-import apiClient from "./api-client";
+import create from "./http-service";
 
+export interface User {
+    id: number;
+    name: string;
+}
+
+export default create('/users')
+/** 
 export interface IUser {
     id: number;
     name: string | undefined;
@@ -13,7 +20,7 @@ export default new class UserService {
 
      getAllUsers () {
 		const controller = new AbortController(); // abort fetch if not needed
-        const request = apiClient.get("/users", { signal: controller.signal })
+        const request = apiClient.get<IUser[]>("/users", { signal: controller.signal })
         return { request, cancel: () => controller.abort()}
     } 
 
@@ -29,3 +36,5 @@ export default new class UserService {
         return apiClient.post(`users`, data)
     }
 }
+
+*/
