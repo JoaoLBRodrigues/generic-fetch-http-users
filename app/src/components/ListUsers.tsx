@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button, ListGroup } from "react-bootstrap";
-
-const fetchApiGet: string = "https://jsonplaceholder.typicode.com/users";
+import apiClient, { CanceledError } from "../services/api-client";
 
 interface IUser {
 	id: number;
@@ -14,18 +13,22 @@ interface IUser {
 
 export default function ListUsers() {
 	const [users, setUser] = useState<IUser[]>([]);
-	const [loading, setLoading] = useState(true);
+	const [isLoading, setLoading] = useState(true);
+	const [error, setError] = useState(null);
+
 	const newUserRef = useRef<HTMLInputElement>(null);
 
-	const getData = () => {
+	const getData = (controller: AbortController) => {
 		setLoading(true);
-		fetch(fetchApiGet)
-			.then((res) => res.json())
-			.then((data) => {
-				setUser(data);
-				console.log(data);
+		apiClient("/users", { signal: controller.signal })
+			.then((res) => {
+				setUser(res.data);
+				console.log(res.data);
 			})
-			.catch((err) => console.log("failed api call" + err))
+			.catch((err) => {
+				if (err instanceof CanceledError) return; //this only work with axios
+				setError(err);
+			})
 			.finally(() => setLoading(false));
 	};
 
@@ -34,35 +37,24 @@ export default function ListUsers() {
 		const newList = users.filter((u) => u.id !== id);
 		setUser(newList);
 
-		fetch(`https://jsonplaceholder.typicode.com/users/${id}`)
+		apiClient(`users/${id}`)
 			.then(() => alert("User deleted Successfuly"))
 			.catch((err) => console.log("error deleting" + err));
 	};
 
-	const Edit = (id: number) => {
+	const Edit = (user: IUser) => {
 		//Optimisc update
-		const newList = users.map((u) =>
-			u.id == id ? { ...u, name: "updated name" } : u
-		);
-		setUser(newList);
+		const updatedUser = { ...user, name: "updated name" };
+		setUser(users.map((u) => (u.id === user.id ? updatedUser : u)));
 
-		fetch(`https://jsonplaceholder.typicode.com/users/${id}`, {
-			method: "PUT",
-			headers: {
-				Accept: "application/json",
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				name: "updated value",
-			}),
-		})
+		apiClient
+			.patch(`users/${user.id}`, updatedUser)
 			.then(() => console.log("User updated Successfuly"))
 			.catch((err) => console.log("error deleting" + err));
 	};
 
 	const Add = () => {
 		//Optimisc update
-
 		setUser([
 			...users,
 			{
@@ -71,16 +63,12 @@ export default function ListUsers() {
 			},
 		]);
 
-		fetch(`https://jsonplaceholder.typicode.com/users`, {
-			method: "POST",
-			headers: {
-				Accept: "application/json",
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				name: newUserRef.current?.value,
-			}),
-		})
+		apiClient
+			.post(`https://jsonplaceholder.typicode.com/users`, {
+				body: JSON.stringify({
+					name: newUserRef.current?.value,
+				}),
+			})
 			.then(() => console.log("User Submited Successfuly"))
 			.catch((err) => console.log("error submiting" + err))
 			.finally(() => {
@@ -91,14 +79,16 @@ export default function ListUsers() {
 	};
 
 	useEffect(() => {
-		getData();
+		const controller = new AbortController(); // abort fetch if not needed
+		getData(controller);
+
+		return () => controller.abort(); //cleaner function
 	}, []);
 
-	useEffect(() => {}, [newUserRef.current?.value]);
+	if (isLoading) return "Loading...";
 
-	if (loading) return "Loading...";
-
-	if (users.length === undefined && !loading) return "Non user exist";
+	if ((users.length === undefined && !isLoading) || error != null)
+		return "Non user exist";
 
 	return (
 		<div className="py-5">
@@ -108,7 +98,8 @@ export default function ListUsers() {
 					Add new user
 				</Button>
 				<div className="px-2 align-self-center">
-					<input ref={newUserRef} placeholder="Add name"></input>
+					<input ref={newUserRef} placeholder="Add name"></input>{" "}
+					{/** implement with useState to update button state */}
 				</div>
 			</div>
 			<ListGroup className="py-4">
@@ -122,7 +113,7 @@ export default function ListUsers() {
 						<div className="d-flex gap-2">
 							<Button
 								className="bg-warning ml-auto"
-								onClick={() => Edit(u.id)}
+								onClick={() => Edit(u)}
 							>
 								Edit
 							</Button>
