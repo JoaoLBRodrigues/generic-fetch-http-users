@@ -1,43 +1,35 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button, ListGroup } from "react-bootstrap";
-import apiClient, { CanceledError } from "../services/api-client";
-
-interface IUser {
-	id: number;
-	name: string | undefined;
-	username?: string;
-	email?: string;
-	phone?: number;
-	webSite?: string;
-}
+import { CanceledError } from "../services/api-client";
+import UserService, { type IUser } from "../services/userService";
+import userService from "../services/userService";
 
 export default function ListUsers() {
 	const [users, setUser] = useState<IUser[]>([]);
 	const [isLoading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
-
 	const newUserRef = useRef<HTMLInputElement>(null);
 
-	const getData = (controller: AbortController) => {
+	useEffect(() => {
 		setLoading(true);
-		apiClient("/users", { signal: controller.signal })
-			.then((res) => {
-				setUser(res.data);
-				console.log(res.data);
-			})
+		const { request, cancel } = UserService.getAllUsers();
+		request
+			.then((res) => setUser(res.data))
 			.catch((err) => {
 				if (err instanceof CanceledError) return; //this only work with axios
 				setError(err);
 			})
 			.finally(() => setLoading(false));
-	};
+
+		return () => cancel();
+	}, []);
 
 	const Delete = (id: number) => {
 		//Optimisc update
 		const newList = users.filter((u) => u.id !== id);
 		setUser(newList);
 
-		apiClient(`users/${id}`)
+		UserService.deleteUsers(id)
 			.then(() => alert("User deleted Successfuly"))
 			.catch((err) => console.log("error deleting" + err));
 	};
@@ -47,29 +39,22 @@ export default function ListUsers() {
 		const updatedUser = { ...user, name: "updated name" };
 		setUser(users.map((u) => (u.id === user.id ? updatedUser : u)));
 
-		apiClient
-			.patch(`users/${user.id}`, updatedUser)
+		userService
+			.editUsers(user, updatedUser)
 			.then(() => console.log("User updated Successfuly"))
 			.catch((err) => console.log("error deleting" + err));
 	};
 
 	const Add = () => {
-		//Optimisc update
-		setUser([
-			...users,
-			{
-				name: newUserRef.current?.value,
-				id: users.length + 1,
-			},
-		]);
+		//pessimist update
+		const newUser: IUser = {
+			name: newUserRef.current?.value,
+			id: users.length + 1,
+		};
 
-		apiClient
-			.post(`https://jsonplaceholder.typicode.com/users`, {
-				body: JSON.stringify({
-					name: newUserRef.current?.value,
-				}),
-			})
-			.then(() => console.log("User Submited Successfuly"))
+		userService
+			.addUser(newUser)
+			.then(() => setUser([...users, newUser]))
 			.catch((err) => console.log("error submiting" + err))
 			.finally(() => {
 				if (newUserRef.current) {
@@ -77,13 +62,6 @@ export default function ListUsers() {
 				}
 			});
 	};
-
-	useEffect(() => {
-		const controller = new AbortController(); // abort fetch if not needed
-		getData(controller);
-
-		return () => controller.abort(); //cleaner function
-	}, []);
 
 	if (isLoading) return "Loading...";
 
