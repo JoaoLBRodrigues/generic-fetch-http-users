@@ -1,35 +1,19 @@
-import React, { useEffect, useRef, useState } from "react";
 import { Button, ListGroup } from "react-bootstrap";
-import { CanceledError } from "../services/api-client";
-import UserService, { type IUser } from "../services/userService";
-import userService from "../services/userService";
+import userService, { type IUser } from "../services/userService";
+import useUsers from "../hooks/userUsers";
+import { useRef } from "react";
 
 export default function ListUsers() {
-	const [users, setUser] = useState<IUser[]>([]);
-	const [isLoading, setLoading] = useState(true);
-	const [error, setError] = useState(null);
+	const { users, error, isLoading, setUser } = useUsers();
 	const newUserRef = useRef<HTMLInputElement>(null);
-
-	useEffect(() => {
-		setLoading(true);
-		const { request, cancel } = UserService.getAllUsers();
-		request
-			.then((res) => setUser(res.data))
-			.catch((err) => {
-				if (err instanceof CanceledError) return; //this only work with axios
-				setError(err);
-			})
-			.finally(() => setLoading(false));
-
-		return () => cancel();
-	}, []);
 
 	const Delete = (id: number) => {
 		//Optimisc update
 		const newList = users.filter((u) => u.id !== id);
 		setUser(newList);
 
-		UserService.deleteUsers(id)
+		userService
+			.delete(id)
 			.then(() => alert("User deleted Successfuly"))
 			.catch((err) => console.log("error deleting" + err));
 	};
@@ -40,7 +24,7 @@ export default function ListUsers() {
 		setUser(users.map((u) => (u.id === user.id ? updatedUser : u)));
 
 		userService
-			.editUsers(user, updatedUser)
+			.update(updatedUser)
 			.then(() => console.log("User updated Successfuly"))
 			.catch((err) => console.log("error deleting" + err));
 	};

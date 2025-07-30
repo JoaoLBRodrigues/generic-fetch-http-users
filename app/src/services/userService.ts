@@ -1,8 +1,8 @@
 import create from "./http-service";
 
-export interface User {
+export interface IUser {
     id: number;
-    name: string;
+    name: string | undefined; 
 }
 
 export default create('/users')
